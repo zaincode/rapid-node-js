@@ -33,7 +33,7 @@ module.exports = {
 		// Models path
 		models : "../app/models/",
 		// Middleware path
-		middleware : "../app/middleware/",
+		middlewares : "../app/middlewares/",
 		// Database Configuration Path
 		database : "../core/core_database"
 	},
