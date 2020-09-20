@@ -53,79 +53,79 @@ module.exports = async (router, global) => {
 					Request : req,
 					Response : res,
 					Global : global,
-					Model :  await require('./core_model') 
+					Model :  await require('./core_model')
 				}
 
 				// Define if middleware is passed, as inital the default value of it is true
 				var is_middleware_passed = true;
-
+				// Defined middleware response
+				var middleware_response = null;
 				// Check if endpoint has middleware
 				// Loop every middleware too call its function
-				await $route_middleware.forEach(async $middleware => {
-					// Each middleware must return two values True and False 
-					// To tell the router if it should continue to the controller or not
-					if(typeof $middleware == 'string'){
-						// Defines middleware paramters
-						const middleware_parameters = {
-							Headers : req.headers,
-							Request : req,
-							Global : global,
-							Model :  await require('./core_model') 
-						};
-						// if middleware is a string of a path to middleware, call the file and the function
-						const middleware_path = env.path.middleware + env.prefix.middleware + $middleware;
-						// Defined middleware response
-						let middleware_response = null;
-						try {
-							// Call the middleware with passed parameters
-							var run_middleware = await require(middleware_path)(middleware_parameters, function(callback){ 
-								middleware_response = callback._message; 
-								if (callback._data != undefined) {
-									Object.assign(endpoint_parameters, { MiddlewareData : callback._data });
-								}
-							});
-						} catch(e){
-							error_handler(e);
-						}
-						// if middleware returns true
-						if (run_middleware == true) {
-							is_middleware_passed = true;
+				var run_middleware = new Promise((resolve, reject) => {
+					$route_middleware.forEach(async $middleware => {
+						// Each middleware must return two values True and False 
+						// To tell the router if it should continue to the controller or not
+						if(typeof $middleware == 'string'){
+							// Defines middleware paramters
+							const middleware_parameters = {
+								Headers : req.headers,
+								Request : req,
+								Global : global,
+								Model :  await require('./core_model') 
+							};
+							// if middleware is a string of a path to middleware, call the file and the function
+							const middleware_path = env.path.middlewares + env.prefix.middleware + $middleware;
+							try {
+								// Call the middleware with passed parameters
+								is_middleware_passed = require(middleware_path)(middleware_parameters, function(callback){ 
+									middleware_response = callback._message; 
+									if (callback._data != undefined) {
+										Object.assign(endpoint_parameters, { MiddlewareData : callback._data });
+									}
+								});
+							} catch(e){
+								is_middleware_passed = false;
+								error_handler(e);
+								reject();
+							}
 						}else{
-							// If middleware returns false
+							// Controller format is not valid
 							is_middleware_passed = false;
-							// Send the response
-							res.send(middleware_response);
+							helper.print.log('Make sure middleware is a string of path to middleware file or a function'.red);
 						}
-					}else{
-						// Controller format is not valid
-						is_middleware_passed = false;
-						helper.print.log('Make sure middleware is a string of path to middleware file or a function'.red);
-					}
-				})
+					});
+					// Resolve the Promise
+					resolve();
+				});
 
-				// Continue to controller only if middleware is passed or no middleware at all
-				if (is_middleware_passed == true) {
-					// Check if controller is a string or a function
-					// if the controller is a function call the function directly to run endpoint
-					if (typeof $route_controller == 'function') {
-						helper.print.log('Accessing '+ $route_controller + ' controller'.cyan);
-						// Directly call the function
-						$route_controller(endpoint_parameters);
-					}else if(typeof $route_controller == 'string'){
-						helper.print.log('Accessing '+ $route_controller.cyan + ' controller'.white);
-						// if controller is a string of a path to controller, call the file and the function
-						const controller_path = env.path.controllers + env.prefix.controller + $route_controller;
-						// Call the controller with passed parameters
-						try {
-							await require(controller_path)(endpoint_parameters);
-						} catch(e){
-							error_handler(e);
+				run_middleware.then(async () => {
+					// Continue to controller only if middleware is passed or no middleware at all
+					if (is_middleware_passed == true) {
+						// Check if controller is a string or a function
+						// if the controller is a function call the function directly to run endpoint
+						if (typeof $route_controller == 'function') {
+							helper.print.log('Accessing '+ $route_controller + ' controller'.cyan);
+							// Directly call the function
+							$route_controller(endpoint_parameters);
+						}else if(typeof $route_controller == 'string'){
+							helper.print.log('Accessing '+ $route_controller.cyan + ' controller'.white);
+							// if controller is a string of a path to controller, call the file and the function
+							const controller_path = env.path.controllers + env.prefix.controller + $route_controller;
+							// Call the controller with passed parameters
+							try {
+								await require(controller_path)(endpoint_parameters);
+							} catch(e){
+								error_handler(e);
+							}
+						}else{
+							// Controller format is not valid
+							helper.print.log('Make sure controller is a string of path to controller file or a function'.red);
 						}
 					}else{
-						// Controller format is not valid
-						helper.print.log('Make sure controller is a string of path to controller file or a function'.red);
+						res.json(middleware_response);
 					}
-				}
+				});
 			}
 		});
 	});
